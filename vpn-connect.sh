@@ -209,7 +209,7 @@ curl -s https://freevpn.$server/accounts/ | grep "Password" > tmp_file
 passwd=`cat tmp_file | gawk -F 'Password:<' '{print $2}' | cut -c 5- | gawk -F '<' '{print $1}'`
 rm tmp_file
 
-su $user -c "xdotool type freevpn.im"
+su $user -c "xdotool type freevpn.$server"
 su $user -c "xdotool key Return"
 su $user -c "xdotool type $passwd"
 su $user -c "xdotool key Return"

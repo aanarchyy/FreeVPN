@@ -1,6 +1,7 @@
 # OVERVIEW [![License](https://img.shields.io/badge/License-GPL%20v3%2B-blue.svg?style=flat-square)](https://github.com/aanarchyy/FreeVPN/blob/master/LICENSE)
 
 Tool to connect to FreeVPN
+Put this script in the root of the folder of certs that you download from them.
 
 # Requirements
 Must have openvpn and xdotool installed.

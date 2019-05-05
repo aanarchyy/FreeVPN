@@ -1,4 +1,4 @@
-# OVERVIEW [![License](https://img.shields.io/badge/License-GPL%20v3%2B-blue.svg?style=flat-square)] 
+# OVERVIEW [![License](https://img.shields.io/badge/License-GPL%20v3%2B-blue.svg?style=flat-square)] (https://github.com/aanarchyy/bully/blob/master/LICENSE.md)
 
 Tool to connect to FreeVPN
 

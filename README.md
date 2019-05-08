@@ -4,7 +4,7 @@ Tool to connect to FreeVPN
 Put this script in the root of the folder of certs that you download from them.
 
 # Requirements
-Must have openvpn and xdotool installed.
+Must have openvpn installed obviously.
 
 # Usage
 

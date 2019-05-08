@@ -5,13 +5,10 @@
 #              AAnarchYY@gmail.com               #
 ##################################################
 
-iam=`whoami`
 servers=( "se" "im" "it" "be" "co.uk" "me" "eu" )
 user=`whoami`
-pwd=`pwd`
 gateway=`ip route | awk '/default/ { print $3 }'` # I'd like to fix this to be more specific, perhaps per device
-server=""
-version="0.2"
+version="0.3"
 
 [ "$UID" -eq 0 ] || exec sudo bash "$0" "$@"
 
@@ -44,22 +41,12 @@ syscheck()
 {
 	#Start of the dummy checks... I hate doing this...
 	#Not gonna check for xterm, cuz who doesn't have that.
-	#Checking if we have xdotool
-	xdck=`xdotool &> /dev/null`
-	if [ "$?" = "127" ] ; then echo -e "You either dont have the xdotool or it is not in your path!" 
-		exit 1
-	fi 
+	
 	#Checking if we have openvpn
 	xdck=`openvpn &> /dev/null`
 	if [ "$?" = "127" ] ; then echo -e "You either dont have the openvpn or it is not in your path!" 
 		exit 1
 	fi 
-}
-
-server()
-{
-	echo "Please enter server: se im it be co.uk me eu"
-	exit 1
 }
 
 restore()
@@ -68,6 +55,9 @@ restore()
 	if [ -e iptables-works ] ; then	
 		echo "Restoring old iptables rules"
 		iptables -F
+		iptables -P INPUT ACCEPT
+		iptables -P FORWARD ACCEPT
+		iptables -P OUTPUT ACCEPT
 		iptables-restore iptables-works
 		rm iptables-works
 	fi
@@ -140,14 +130,14 @@ fi
 server=${server,,} #non-posix, may fix later
 if [ "$server" = "1" ] || [ "$server" = "me" ] ; then server="me" ; num=1 ; ct="FR" ; fi
 if [ "$server" = "2" ] || [ "$server" = "se" ] ; then server="se" ; num=2 ; ct="FR" ; fi
-if [ "$server" = "3" ] || [ "$server" = "im" ] ;then server="im" ; num=3 ; ct="FR" ; fi
+if [ "$server" = "3" ] || [ "$server" = "im" ] ; then server="im" ; num=3 ; ct="FR" ; fi
 if [ "$server" = "4" ] || [ "$server" = "it" ] ; then server="it" ; num=4 ; ct="FR" ; fi
 if [ "$server" = "5" ] || [ "$server" = "be" ] ; then server="be" ; num=5 ; ct="PL" ; fi
 if [ "$server" = "6" ] || [ "$server" = "co.uk" ] ; then server="co.uk" ; num=6 ; ct="DE" ; fi
 if [ "$server" = "7" ] || [ "$server" = "eu" ] ; then server="eu" ; num=7 ; ct="NL" ; fi
-if [[ ! $server =~ ^(se|im|it|be|co.uk|me|eu)$ ]]; then echo "Please enter a valid server!" ; exit 1 ; fi
+if [[ ! $server =~ ^(se|im|it|be|co.uk|me|eu)$ ]] ; then echo "Please enter a valid server!" ; exit 1 ; fi
 
-echo -e "SERVER $server NUM $num CT $ct\n"
+echo -e "Server $server\n"
 
 if [ ! $proto ] ; then
 	echo "1)TCP 2)UDP"
@@ -180,8 +170,8 @@ if [ ! $port ] ; then
 	fi
 fi
 
-if [[ "$proto" = "TCP" ]] && [[ ! $port =~ ^(80|443)$ ]]; then echo "Invalid" ; exit 1 ; fi
-if [[ "$proto" = "UDP" ]] && [[ ! $port =~ ^(53|40000)$ ]]; then echo "Invalid" ; exit 1 ; fi
+if [[ "$proto" = "TCP" ]] && [[ ! $port =~ ^(80|443)$ ]]; then echo "Invalid port" ; exit 1 ; fi
+if [[ "$proto" = "UDP" ]] && [[ ! $port =~ ^(53|40000)$ ]]; then echo "Invalid port" ; exit 1 ; fi
 
 echo -e "Port $port\n"
 folder='"'
@@ -190,29 +180,31 @@ folder+=" - FreeVPN."
 folder+=$server
 folder+=" - "
 folder+=$ct
-folder+="/"
 
-file="FreeVPN."
+file="/"
+file+="FreeVPN."
 file+=$server
 file+="-"
 file+=$proto
 if [ "$proto" = "UDP" ] ; then file+="-" ; fi
 file+=$port
 file+='.ovpn"'
-echo "openvpn $folder$file"
-
-#Really want to fix this so I don't have to open an xterm
-xterm -hold -e "openvpn $folder$file ; $SHELL" &
+qt='"'
 
 #Scrape the password from the site
 curl -s https://freevpn.$server/accounts/ | grep "Password" > tmp_file
 passwd=`cat tmp_file | gawk -F 'Password:<' '{print $2}' | cut -c 5- | gawk -F '<' '{print $1}'`
 rm tmp_file
+echo "USER: freevpn.$server PASS: $passwd"
 
-su $user -c "xdotool type freevpn.$server"
-su $user -c "xdotool key Return"
-su $user -c "xdotool type $passwd"
-su $user -c "xdotool key Return"
+echo "freevpn.$server" > "${folder:1}/userpass"
+echo "$passwd" >> "${folder:1}/userpass"
 
 if [ $ipv4 ] ; then ipv4kill ; fi
 if [ $ipv6 ] ; then ipv6kill ; fi
+
+echo "openvpn --config $folder$file --auth-user-pass $folder/userpass$qt"
+
+#Really want to fix this so I don't have to open an xterm
+xterm -hold -e "openvpn --config $folder$file --auth-user-pass $folder/userpass$qt; $SHELL" &
+ 

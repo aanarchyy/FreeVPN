@@ -5,8 +5,6 @@
 #              AAnarchYY@gmail.com               #
 ##################################################
 
-servers=( "se" "im" "it" "be" "co.uk" "me" "eu" )
-user=`whoami`
 gateway=`ip route | awk '/default/ { print $3 }'` # I'd like to fix this to be more specific, perhaps per device
 version="0.3"
 
@@ -18,7 +16,6 @@ trap ctrl_c INT
 
 usage()
 {
-
 	echo "Tool to connect to FreeVPN Version:$version (aanarchyy@gmail.com)"
 	echo -e "\t$0 {arguments}"
 	echo -e "\t-u \tServer (se im it be co.uk me eu)"
@@ -44,14 +41,13 @@ syscheck()
 	
 	#Checking if we have openvpn
 	xdck=`openvpn &> /dev/null`
-	if [ "$?" = "127" ] ; then echo -e "You either dont have the openvpn or it is not in your path!" 
+	if [ "$?" = "127" ] ; then echo -e "You either dont have openvpn or it is not in your path!" 
 		exit 1
 	fi 
 }
 
 restore()
 {
-
 	if [ -e iptables-works ] ; then	
 		echo "Restoring old iptables rules"
 		iptables -F
@@ -181,14 +177,16 @@ folder+=$server
 folder+=" - "
 folder+=$ct
 
-file="/"
-file+="FreeVPN."
-file+=$server
-file+="-"
-file+=$proto
-if [ "$proto" = "UDP" ] ; then file+="-" ; fi
-file+=$port
-file+='.ovpn"'
+config="--config "
+config+=$folder
+config+="/"
+config+="FreeVPN."
+config+=$server
+config+="-"
+config+=$proto
+if [ "$proto" = "UDP" ] ; then config+="-" ; fi
+config+=$port
+config+='.ovpn"'
 qt='"'
 
 #Scrape the password from the site
@@ -196,15 +194,12 @@ curl -s https://freevpn.$server/accounts/ | grep "Password" > tmp_file
 passwd=`cat tmp_file | gawk -F 'Password:<' '{print $2}' | cut -c 5- | gawk -F '<' '{print $1}'`
 rm tmp_file
 echo "USER: freevpn.$server PASS: $passwd"
-
 echo "freevpn.$server" > "${folder:1}/userpass"
 echo "$passwd" >> "${folder:1}/userpass"
 
 if [ $ipv4 ] ; then ipv4kill ; fi
 if [ $ipv6 ] ; then ipv6kill ; fi
 
-echo "openvpn --config $folder$file --auth-user-pass $folder/userpass$qt"
-
-#Really want to fix this so I don't have to open an xterm
-xterm -hold -e "openvpn --config $folder$file --auth-user-pass $folder/userpass$qt; $SHELL" &
- 
+cmd="openvpn $config --auth-user-pass $folder/userpass$qt"
+echo $cmd
+sh -c "openvpn $config --auth-user-pass $folder/userpass$qt"

@@ -5,10 +5,10 @@
 #              AAnarchYY@gmail.com               #
 ##################################################
 
-gateway=`ip route | awk '/default/ { print $3 }'` # I'd like to fix this to be more specific, perhaps per device
-version="0.3"
-
 [ "$UID" -eq 0 ] || exec sudo bash "$0" "$@"
+
+gateway=`ip route | awk '/default/ { print $3 }'` # I'd like to fix this to be more specific, perhaps per device
+version="0.4"
 
 trap ctrl_c INT
 
@@ -21,6 +21,7 @@ usage()
 	echo -e "\t-u \tServer (se im it be co.uk me eu)"
 	echo -e "\t-p \tProtocol (TCP UDP)"
 	echo -e "\t-t \tPort (TCP-80/443 UDP-53/40000)"
+	echo -e "\t-n \tPassword to use"
 	echo -e "\t-4 \tAttempt to block IPV4 incase the VPN drops"
 	echo -e "\t-6 \tAttempt to block IPV6"
 	echo -e "\t-r \tRestore old iptables rules if they are backed up"
@@ -37,10 +38,9 @@ ctrl_c()
 syscheck()
 {
 	#Start of the dummy checks... I hate doing this...
-	#Not gonna check for xterm, cuz who doesn't have that.
 	
 	#Checking if we have openvpn
-	xdck=`openvpn &> /dev/null`
+	ovpn=`which openvpn &> /dev/null`
 	if [ "$?" = "127" ] ; then echo -e "You either dont have openvpn or it is not in your path!" 
 		exit 1
 	fi 
@@ -66,7 +66,6 @@ restore()
 		sysctl -w net.ipv6.conf.all.disable_ipv6=0
 		sysctl -w net.ipv6.conf.default.disable_ipv6=0
 	fi
-	exit 0
 }
 
 ipv4kill()
@@ -104,17 +103,18 @@ ipv6kill()
 
 ### End of Functions ###
 
-while getopts u:p:t:46hr opt
+while getopts u:p:t:n:46hr opt
 do
 	case $opt in
 	u) server="$OPTARG";;
 	t) port="$OPTARG";;
 	p) proto="$OPTARG";;
+	n) passwd="$OPTARG";;
 	4) ipv4=1;;
 	6) ipv6=1;;
 	h) usage;;
-	r) restore;;
-	*) usage ;;
+	r) restore ; exit 0;;
+	*) usage;;
 	esac
 done
 if [ ! $server ] ; then
@@ -133,8 +133,8 @@ if [ "$server" = "6" ] || [ "$server" = "co.uk" ] ; then server="co.uk" ; num=6 
 if [ "$server" = "7" ] || [ "$server" = "eu" ] ; then server="eu" ; num=7 ; ct="NL" ; fi
 if [[ ! $server =~ ^(se|im|it|be|co.uk|me|eu)$ ]] ; then echo "Please enter a valid server!" ; exit 1 ; fi
 
-echo -e "Server $server\n"
-
+serverip=`dig freevpn.$server | awk '/^;; ANSWER SECTION:$/ { getline ; print $5 }'`
+echo -e "Server freevpn.$server $serverip\n"
 if [ ! $proto ] ; then
 	echo "1)TCP 2)UDP"
 	echo "Protocol?"
@@ -179,8 +179,7 @@ folder+=$ct
 
 config="--config "
 config+=$folder
-config+="/"
-config+="FreeVPN."
+config+="/FreeVPN."
 config+=$server
 config+="-"
 config+=$proto
@@ -190,9 +189,38 @@ config+='.ovpn"'
 qt='"'
 
 #Scrape the password from the site
-curl -s https://freevpn.$server/accounts/ | grep "Password" > tmp_file
-passwd=`cat tmp_file | gawk -F 'Password:<' '{print $2}' | cut -c 5- | gawk -F '<' '{print $1}'`
-rm tmp_file
+#Trying multiple ways
+
+if [ ! $passwd ] ; then
+	#Trying curl first
+	curl -s https://freevpn.$server/accounts/ > tmp_file &> /dev/null
+	passwd=`cat tmp_file | awk -F 'Password:<' '{print $2}' | cut -c 5- | awk -F '<' '{print $1} ' | tr -d '[:space:]'`
+	rm tmp_file
+
+	#Trying wget
+	if [ ! $passwd ] ; then
+		if [ -e accounts.html ] ; then rm accounts.html ; fi
+		wget https://freevpn.$server/accounts/ -q -O accounts.html &> /dev/null
+		passwd=`cat accounts.html | awk -F 'Password:<' '{print $2}' | cut -c 5- | awk -F '<' '{print $1}' | tr -d '[:space:]'`
+		rm accounts.html
+	fi
+	
+	#Trying openssl
+	if [ ! $passwd ] ; then
+		passwd=`{ echo "GET /accounts HTTP/1.1"; echo -e "Host: freevpn.$server\n\n"; sleep 3; } | openssl s_client -connect freevpn.$server:443 | awk -F 'Password:<' '{print $2}' | cut -c 5- | awk -F '<' '{print $1}' | tr -d '[:space:]'`
+	fi
+	
+	if [ ! $passwd ] ; then
+		wsite=`{ echo "GET /accounts HTTP/1.1"; echo -e "Host: freevpn.$server\n\n"; sleep 3; } | busybox ssl_client freevpn.$server > tmp_file`
+		passwd=`cat tmp_file | awk -F 'Password:<' '{print $2}' | cut -c 5- | awk -F '<' '{print $1}' | tr -d '[:space:]'`
+	fi
+fi
+	
+if [ ! $passwd ] ; then
+	echo "Unable to retrieve password from website!"
+	exit 1
+fi
+
 echo "USER: freevpn.$server PASS: $passwd"
 echo "freevpn.$server" > "${folder:1}/userpass"
 echo "$passwd" >> "${folder:1}/userpass"

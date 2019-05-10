@@ -9,7 +9,7 @@ Must have openvpn installed obviously.
 # Usage
 
 ```
-	Tool to connect to FreeVPN Version:0.4 (aanarchyy@gmail.com)
+	Tool to connect to FreeVPN Version:0.4.1 (aanarchyy@gmail.com)
 	./vpn-connect.sh {arguments}
 	-u 	Server (se im it be co.uk me eu)
 	-p 	Protocol (TCP UDP)
@@ -21,7 +21,7 @@ Must have openvpn installed obviously.
 	-h 	help
 ```
 **-u**
-Select the server you wish to connect to.  Accepted responses are:
+Select the server you wish to connect to.  Valid responses are:
 1)me 2)se 3)im 4)it 5)be 6)co.uk 7)eu
 Either the numbers or the actual address works.
 

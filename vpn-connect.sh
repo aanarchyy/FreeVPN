@@ -40,8 +40,8 @@ syscheck()
 	#Start of the dummy checks... I hate doing this...
 	
 	#Checking if we have openvpn
-	ovpn=`which openvpn &> /dev/null`
-	if [ "$?" = "127" ] ; then echo -e "You either dont have openvpn or it is not in your path!" 
+	ovpn=`which openvpn &2> /dev/null`
+	if [ ! $ovpn ] ; then echo -e "You either dont have openvpn or it is not in your path!" 
 		exit 1
 	fi 
 }
@@ -102,6 +102,8 @@ ipv6kill()
 }
 
 ### End of Functions ###
+
+syscheck
 
 while getopts u:p:t:n:46hr opt
 do

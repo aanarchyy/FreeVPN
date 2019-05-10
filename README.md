@@ -9,7 +9,7 @@ Must have openvpn installed obviously.
 # Usage
 
 ```
-	Tool to connect to FreeVPN Version:0.4.1 (aanarchyy@gmail.com)
+	Tool to connect to FreeVPN Version:0.4.2 (aanarchyy@gmail.com)
 	./vpn-connect.sh {arguments}
 	-u 	Server (se im it be co.uk me eu)
 	-p 	Protocol (TCP UDP)

@@ -1,14 +1,33 @@
 #!/bin/bash
 
-##################################################
-#  My silly little script to connect to FreeVPN  #
-#              AAnarchYY@gmail.com               #
-##################################################
+###################################################
+#  My silly little script to connect to FreeVPN   #
+#              AAnarchYY@gmail.com                #
+###################################################
+
+###################################################
+#                    TODO                         #
+#   Maybe make temp files in /tmp or some other   #
+# folder to avoid permission issues incase we are #
+#   running on an embedded system or something.   #
+#                                                 #
+#  Fix the DNS so it reads the user DNS and adds  #
+#    that instead of the cloudfare one i use.     #
+#                                                 #
+# Maybe check if a user suplied password matches  #
+# one we can scrape from the website, if we can.  #
+#                                                 #
+#  Would like to add a way to download the certs  #
+# if FreeVPN didn't give them arbitrary names it  #
+#             would be much simpler.              #
+#                                                 #
+#             Fix that gateway thing              #
+###################################################
 
 [ "$UID" -eq 0 ] || exec sudo bash "$0" "$@"
 
-gateway=`ip route | awk '/default/ { print $3 }'` # I'd like to fix this to be more specific, perhaps per device
-version="0.4"
+gateway=`ip route | awk '/default/ { print $3 }'`
+version="0.4.2"
 
 trap ctrl_c INT
 
@@ -16,7 +35,7 @@ trap ctrl_c INT
 
 usage()
 {
-	echo "Tool to connect to FreeVPN Version:$version (aanarchyy@gmail.com)"
+	echo "Tool to connect to FreeVPN Version $version (aanarchyy@gmail.com)"
 	echo -e "\t$0 {arguments}"
 	echo -e "\t-u \tServer (se im it be co.uk me eu)"
 	echo -e "\t-p \tProtocol (TCP UDP)"
@@ -82,7 +101,7 @@ ipv4kill()
 	iptables -A OUTPUT -o tun0 -p icmp -j ACCEPT
 
 	iptables -A OUTPUT -d $gateway/24 -j ACCEPT
-	iptables -A OUTPUT -d 1.1.1.1 -j ACCEPT #Fix this dns
+	iptables -A OUTPUT -d 1.1.1.1 -j ACCEPT
 
 	iptables -A OUTPUT -p udp -m udp --dport 53 -j ACCEPT
 	iptables -A OUTPUT -p udp -m udp --dport 40000 -j ACCEPT
@@ -135,8 +154,7 @@ if [ "$server" = "6" ] || [ "$server" = "co.uk" ] ; then server="co.uk" ; num=6 
 if [ "$server" = "7" ] || [ "$server" = "eu" ] ; then server="eu" ; num=7 ; ct="NL" ; fi
 if [[ ! $server =~ ^(se|im|it|be|co.uk|me|eu)$ ]] ; then echo "Please enter a valid server!" ; exit 1 ; fi
 
-serverip=`dig freevpn.$server | awk '/^;; ANSWER SECTION:$/ { getline ; print $5 }'`
-echo -e "Server freevpn.$server $serverip\n"
+echo -e "Server freevpn.$server\n"
 if [ ! $proto ] ; then
 	echo "1)TCP 2)UDP"
 	echo "Protocol?"
@@ -216,6 +234,7 @@ if [ ! $passwd ] ; then
 	if [ ! $passwd ] ; then
 		wsite=`{ echo "GET /accounts HTTP/1.1"; echo -e "Host: freevpn.$server\n\n"; sleep 3; } | busybox ssl_client freevpn.$server > tmp_file`
 		passwd=`cat tmp_file | awk -F 'Password:<' '{print $2}' | cut -c 5- | awk -F '<' '{print $1}' | tr -d '[:space:]'`
+		rm tmp_file
 	fi
 fi
 	
@@ -232,12 +251,13 @@ upfile=${folder:1}/userpass
 if [ $ipv4 ] ; then ipv4kill ; fi
 if [ $ipv6 ] ; then ipv6kill ; fi
 
-cmd="openvpn $config --auth-user-pass $folder/userpass$qt"
-echo $cmd
-
 if [ -e "$upfile" ] ; then
+	cmd="openvpn $config --auth-user-pass $folder/userpass$qt"
+	echo $cmd
 	sh -c "openvpn $config --auth-user-pass $folder/userpass$qt"
 else
-	#Always been a fan of a fall-back
+	#Always been a fan of a fall-back, should not reach this point anyway.
+	cmd="openvpn $config"
+	echo $cmd
 	sh -c "openvpn $config"
 fi

@@ -212,6 +212,7 @@ if [ ! $passwd ] ; then
 		passwd=`{ echo "GET /accounts HTTP/1.1"; echo -e "Host: freevpn.$server\n\n"; sleep 3; } | openssl s_client -connect freevpn.$server:443 | awk -F 'Password:<' '{print $2}' | cut -c 5- | awk -F '<' '{print $1}' | tr -d '[:space:]'`
 	fi
 	
+	#Running out of options here...
 	if [ ! $passwd ] ; then
 		wsite=`{ echo "GET /accounts HTTP/1.1"; echo -e "Host: freevpn.$server\n\n"; sleep 3; } | busybox ssl_client freevpn.$server > tmp_file`
 		passwd=`cat tmp_file | awk -F 'Password:<' '{print $2}' | cut -c 5- | awk -F '<' '{print $1}' | tr -d '[:space:]'`
@@ -226,10 +227,17 @@ fi
 echo "USER: freevpn.$server PASS: $passwd"
 echo "freevpn.$server" > "${folder:1}/userpass"
 echo "$passwd" >> "${folder:1}/userpass"
+upfile=${folder:1}/userpass
 
 if [ $ipv4 ] ; then ipv4kill ; fi
 if [ $ipv6 ] ; then ipv6kill ; fi
 
 cmd="openvpn $config --auth-user-pass $folder/userpass$qt"
 echo $cmd
-sh -c "openvpn $config --auth-user-pass $folder/userpass$qt"
+
+if [ -e "$upfile" ] ; then
+	sh -c "openvpn $config --auth-user-pass $folder/userpass$qt"
+else
+	#Always been a fan of a fall-back
+	sh -c "openvpn $config"
+fi

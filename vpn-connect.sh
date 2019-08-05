@@ -7,27 +7,23 @@
 
 ###################################################
 #                    TODO                         #
-#   Maybe make temp files in /tmp or some other   #
-# folder to avoid permission issues incase we are #
-#   running on an embedded system or something.   #
 #                                                 #
 #  Fix the DNS so it reads the user DNS and adds  #
 #    that instead of the cloudfare one i use.     #
 #                                                 #
-# Maybe check if a user suplied password matches  #
-# one we can scrape from the website, if we can.  #
-#                                                 #
-#  Would like to add a way to download the certs  #
-# if FreeVPN didn't give them arbitrary names it  #
-#             would be much simpler.              #
-#                                                 #
 #             Fix that gateway thing              #
+#												  #
+#  Would like to add the L2TP and PPTP protocols  #
+#                  as optional                    #
 ###################################################
 
 [ "$UID" -eq 0 ] || exec sudo bash "$0" "$@"
 
+#declaring variables
 gateway=`ip route | awk '/default/ { print $3 }'`
-version="0.4.2"
+pwd=`pwd`
+version="0.5"
+certs="FreeVPN.me-OpenVPN-Bundle-April-2019.zip"
 
 trap ctrl_c INT
 
@@ -44,13 +40,17 @@ usage()
 	echo -e "\t-4 \tAttempt to block IPV4 incase the VPN drops"
 	echo -e "\t-6 \tAttempt to block IPV6"
 	echo -e "\t-r \tRestore old iptables rules if they are backed up"
+	echo -e "\t-f \tTemporary directory to use. Deafault is /dev/shm or /tmp"
 	echo -e "\t-h \thelp"
 	exit 0
 }
 
 ctrl_c()
 {
-	echo -e "\n\nCTRL-C!"
+	echo -e "\n\nCTRL-C! Cleaning up best we can!"
+	restore
+	rm -rf $tmpdr/*FreeVPN*
+	rm -f $tmpdr/userpass
 	exit 0
 }
 
@@ -63,6 +63,7 @@ syscheck()
 	if [ ! $ovpn ] ; then echo -e "You either dont have openvpn or it is not in your path!" 
 		exit 1
 	fi 
+	
 }
 
 restore()
@@ -89,7 +90,7 @@ restore()
 
 ipv4kill()
 {
-	iptables-save > iptables-works
+	iptables-save > $tmpdr/iptables-works
 	echo "Attempting to block IPV4 traffic if the VPN drops connection"
 	iptables -P INPUT DROP
 	iptables -P FORWARD DROP
@@ -101,6 +102,7 @@ ipv4kill()
 	iptables -A OUTPUT -o tun0 -p icmp -j ACCEPT
 
 	iptables -A OUTPUT -d $gateway/24 -j ACCEPT
+	###FIX ME : attempt to read user dns server!###
 	iptables -A OUTPUT -d 1.1.1.1 -j ACCEPT
 
 	iptables -A OUTPUT -p udp -m udp --dport 53 -j ACCEPT
@@ -110,7 +112,7 @@ ipv4kill()
 
 ipv6kill()
 {
-	ip6tables-save > ip6tables-works
+	ip6tables-save > $tmpdr/ip6tables-works
 	echo "Attempting to block IPV6 traffic"
 	sysctl -w net.ipv6.conf.all.disable_ipv6=1
 	sysctl -w net.ipv6.conf.default.disable_ipv6=1
@@ -120,11 +122,23 @@ ipv6kill()
 
 }
 
+dlcerts()
+{
+	cd $tmpdr
+	echo "DELETING!"
+	rm -rf $1/$certs
+	rm -rf $1/*FreeVPN*
+	#curl -s https://freevpn.me/$certs --output $1/$certs
+	wget -q -O $1/$certs https://freevpn.me/$certs 2>&1
+	unzip -q -o $1/$certs -d $1
+	rm -rf $1/$certs
+}
+
 ### End of Functions ###
 
 syscheck
 
-while getopts u:p:t:n:46hr opt
+while getopts u:p:t:n:f:46hr opt
 do
 	case $opt in
 	u) server="$OPTARG";;
@@ -134,13 +148,23 @@ do
 	4) ipv4=1;;
 	6) ipv6=1;;
 	h) usage;;
+	f) tmpdr="$OPTARG";;
 	r) restore ; exit 0;;
 	*) usage;;
 	esac
 done
+
+if [ ! $tmpdr ] ; then tmpdr="/dev/shm" ; fi
+if [ ! -w /dev/shm ]; then echo "/dev/shm unwritable!"; tmpdr=""; fi
+if [ ! $tmpdr ] ; then tmpdr="/tmp" ; fi
+if [ ! -w /tmp ]; then echo "/tmp unwritable!"; tmpdr=""; fi
+if [ ! -w "$tmpdr" ]; then echo "Please specify a writable folder! -f [/dir]" ; exit 1 ; fi 
+echo -e "Temporary directory $tmpdr\n"
+dlcerts $tmpdr
+
 if [ ! $server ] ; then
-	echo "1)me 2)se 3)im 4)it 5)be 6)co.uk 7)eu"
 	echo "Server?"
+	echo "1)me 2)se 3)im 4)it 5)be 6)co.uk 7)eu"
 	read server
 fi
 
@@ -153,21 +177,18 @@ if [ "$server" = "5" ] || [ "$server" = "be" ] ; then server="be" ; num=5 ; ct="
 if [ "$server" = "6" ] || [ "$server" = "co.uk" ] ; then server="co.uk" ; num=6 ; ct="DE" ; fi
 if [ "$server" = "7" ] || [ "$server" = "eu" ] ; then server="eu" ; num=7 ; ct="NL" ; fi
 if [[ ! $server =~ ^(se|im|it|be|co.uk|me|eu)$ ]] ; then echo "Please enter a valid server!" ; exit 1 ; fi
-
 echo -e "Server freevpn.$server\n"
+
 if [ ! $proto ] ; then
-	echo "1)TCP 2)UDP"
 	echo "Protocol?"
+	echo "1)TCP 2)UDP"
 	read proto
 fi
-
 if [ "$proto" = "1" ] ; then proto=TCP ; fi
 if [ "$proto" = "2" ] ; then proto=UDP ; fi
 proto=${proto^^} #non-posix, may fix later
-
-echo -e "Protocol $proto\n"
-
 if [[ ! $proto =~ ^(TCP|UDP)$ ]] ; then echo "Please enter a valid protocol!" ; exit 1 ; fi
+echo -e "Protocol $proto\n"
 
 if [ ! $port ] ; then
 	if [ "$proto" = "TCP" ] ; then
@@ -190,52 +211,24 @@ if [[ "$proto" = "TCP" ]] && [[ ! $port =~ ^(80|443)$ ]]; then echo "Invalid por
 if [[ "$proto" = "UDP" ]] && [[ ! $port =~ ^(53|40000)$ ]]; then echo "Invalid port" ; exit 1 ; fi
 
 echo -e "Port $port\n"
-folder='"'
-folder+=$num
-folder+=" - FreeVPN."
-folder+=$server
-folder+=" - "
-folder+=$ct
 
-config="--config "
-config+=$folder
-config+="/FreeVPN."
+config=' --config "'
+config+="$tmpdr/"
+config+=$num
+config+=" - FreeVPN."
 config+=$server
-config+="-"
-config+=$proto
+config+=" - $ct/FreeVPN.$server-$proto"
 if [ "$proto" = "UDP" ] ; then config+="-" ; fi
 config+=$port
 config+='.ovpn"'
-qt='"'
+
 
 #Scrape the password from the site
-#Trying multiple ways
 
 if [ ! $passwd ] ; then
-	#Trying curl first
-	curl -s https://freevpn.$server/accounts/ > tmp_file &> /dev/null
-	passwd=`cat tmp_file | awk -F 'Password:<' '{print $2}' | cut -c 5- | awk -F '<' '{print $1} ' | tr -d '[:space:]'`
-	rm tmp_file
-
 	#Trying wget
-	if [ ! $passwd ] ; then
-		if [ -e accounts.html ] ; then rm accounts.html ; fi
-		wget https://freevpn.$server/accounts/ -q -O accounts.html &> /dev/null
-		passwd=`cat accounts.html | awk -F 'Password:<' '{print $2}' | cut -c 5- | awk -F '<' '{print $1}' | tr -d '[:space:]'`
-		rm accounts.html
-	fi
-	
-	#Trying openssl
-	if [ ! $passwd ] ; then
-		passwd=`{ echo "GET /accounts HTTP/1.1"; echo -e "Host: freevpn.$server\n\n"; sleep 3; } | openssl s_client -connect freevpn.$server:443 | awk -F 'Password:<' '{print $2}' | cut -c 5- | awk -F '<' '{print $1}' | tr -d '[:space:]'`
-	fi
-	
-	#Running out of options here...
-	if [ ! $passwd ] ; then
-		wsite=`{ echo "GET /accounts HTTP/1.1"; echo -e "Host: freevpn.$server\n\n"; sleep 3; } | busybox ssl_client freevpn.$server > tmp_file`
-		passwd=`cat tmp_file | awk -F 'Password:<' '{print $2}' | cut -c 5- | awk -F '<' '{print $1}' | tr -d '[:space:]'`
-		rm tmp_file
-	fi
+	page="`wget -qO- https://freevpn.$server/accounts/accounts`"
+	passwd=`echo $page | awk -F 'Password:<' '{print $2}' | cut -c 5- | awk -F '<' '{print $1}' | tr -d '[:space:]'`
 fi
 	
 if [ ! $passwd ] ; then
@@ -244,20 +237,18 @@ if [ ! $passwd ] ; then
 fi
 
 echo "USER: freevpn.$server PASS: $passwd"
-echo "freevpn.$server" > "${folder:1}/userpass"
-echo "$passwd" >> "${folder:1}/userpass"
-upfile=${folder:1}/userpass
+echo "freevpn.$server" > "$tmpdr/userpass"
+echo "$passwd" >> "$tmpdr/userpass"
+upfile=$tmpdr/userpass
 
 if [ $ipv4 ] ; then ipv4kill ; fi
 if [ $ipv6 ] ; then ipv6kill ; fi
 
 if [ -e "$upfile" ] ; then
-	cmd="openvpn $config --auth-user-pass $folder/userpass$qt"
+	cmd="openvpn $config  --mute-replay-warnings --auth-user-pass $tmpdr/userpass"
 	echo $cmd
-	sh -c "openvpn $config --auth-user-pass $folder/userpass$qt"
+	sh -c "openvpn $config  --mute-replay-warnings --auth-user-pass $tmpdr/userpass"
 else
-	#Always been a fan of a fall-back, should not reach this point anyway.
-	cmd="openvpn $config"
-	echo $cmd
-	sh -c "openvpn $config"
+	echo "Unable to connect!"
+	exit 1
 fi

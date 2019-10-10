@@ -23,7 +23,7 @@
 gateway=`ip route | awk '/default/ { print $3 }'`
 pwd=`pwd`
 version="0.5"
-certs="FreeVPN.me-OpenVPN-Bundle-April-2019.zip"
+certs="FreeVPN.me-OpenVPN-Bundle-October-2019.zip"
 
 trap ctrl_c INT
 
@@ -213,7 +213,7 @@ if [[ "$proto" = "UDP" ]] && [[ ! $port =~ ^(53|40000)$ ]]; then echo "Invalid p
 echo -e "Port $port\n"
 
 config=' --config "'
-config+="$tmpdr/"
+config+="$tmpdr/FreeVPN.me-OpenVPN-Bundle-October-2019/"
 config+=$num
 config+=" - FreeVPN."
 config+=$server
